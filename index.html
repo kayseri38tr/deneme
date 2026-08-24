@@ -117,8 +117,8 @@
       .inline-player-frame {
         position: relative;
         width: min(900px, 100%);
+        height: clamp(180px, 56.25vw, 506px);
         margin: 0 auto;
-        aspect-ratio: 16 / 9;
         overflow: hidden;
         border-radius: 11px;
         background: #000;
@@ -443,7 +443,12 @@
           top: 62px;
           padding: 6px 13px 14px;
         }
-        .inline-player-frame { border-radius: 8px; }
+         .inline-player-frame {
+           width: 100%;
+           height: calc((100vw - 26px) * .5625);
+           max-height: none;
+           border-radius: 8px;
+         }
         .inline-player-details { display: block; padding: 10px 3px 2px; }
         .inline-player-details h2 { font-size: 15px; }
         .inline-player-details p { font-size: 11px; }
@@ -629,6 +634,7 @@
       let searchLoading = false;
       let remoteQuery = "";
        let playerLoadToken = 0;
+       const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
       const grid = document.querySelector("#videoGrid");
       const emptyState = document.querySelector("#emptyState");
@@ -904,7 +910,7 @@
 
        function loadVideoIframe(video) {
          playerFrame.innerHTML = `<iframe
-           src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(video.id)}?autoplay=1&controls=1&rel=0&playsinline=1&vq=small"
+           src="https://www.youtube.com/embed/${encodeURIComponent(video.id)}?autoplay=1&controls=1&rel=0&playsinline=1"
            title="${video.title.replace(/"/g, "&quot;")}"
            loading="eager"
            referrerpolicy="strict-origin-when-cross-origin"
@@ -935,6 +941,15 @@
 
        async function loadNativeVideo(video) {
          const token = ++playerLoadToken;
+
+         // Android/iOS tarayıcıları üçüncü taraf akış adreslerini çoğu zaman
+         // CORS nedeniyle engeller. Mobilde uyumlu YouTube oynatıcısını,
+         // masaüstünde ise hafif HTML5 oynatıcıyı kullan.
+         if (isMobileDevice) {
+           loadVideoIframe(video);
+           return;
+         }
+
          playerFrame.innerHTML = '<div class="player-loading">Hafif oynatıcı hazırlanıyor...<br><small>Akış adresi aranıyor</small></div>';
 
          for (const endpoint of STREAM_ENDPOINTS) {
