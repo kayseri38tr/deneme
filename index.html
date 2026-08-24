@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="SafeShare.tv entegrasyonlu YouTube video arama ve listeleme uygulaması." />
-    <link rel="preconnect" href="https://safeshare.tv" />
+    <meta name="description" content="Hızlı ve çerezsiz YouTube video arama ve listeleme uygulaması." />
+    <link rel="preconnect" href="https://invidious.nerdvpn.de" />
     <link rel="preconnect" href="https://i.ytimg.com" />
-    <title>YouTune Türkiye (SafeShare Player)</title>
+    <title>YouTune Türkiye (Hızlı Player)</title>
     <style>
       :root {
         --bg: #0f0f0f;
@@ -425,9 +425,6 @@
         { type: "piped", url: "https://pipedapi.kavin.rocks/trending?region=TR" },
         { type: "invidious", url: "https://inv.tux.pizza/api/v1/trending?region=TR" }
       ];
-      
-      // SafeShare URL yapısı
-      const SAFESHARE_BASE_URL = "https://safeshare.tv";
 
       function setCookie(name, value, days) {
         let expires = "";
@@ -779,18 +776,18 @@
         document.querySelector("#playerTitle").textContent = activeVideo.title;
         document.querySelector("#playerMeta").textContent = `${activeVideo.channel} • ${activeVideo.views} • ${activeVideo.age}`;
         
-        // SafeShare Bağlantısı
-        document.querySelector("#safeshareButton").href = `${SAFESHARE_BASE_URL}/v/${encodeURIComponent(id)}`;
+        // SafeShare'de Aç Butonu - Harici Sayfaya Yönlendirir
+        document.querySelector("#safeshareButton").href = `https://safeshare.tv/v/${encodeURIComponent(id)}`;
         
         favoriteButton.textContent = isFavorite(id) ? "♥ Favorilerden çıkar" : "♡ Favorile";
         favoriteButton.classList.toggle("selected", isFavorite(id));
         
-        // YouTube veya nocookie oynatıcısı yerine SafeShare Player yapısına geçiş
+        // Hızlı, çerezsiz ve takılmayan Invidious Player embed kaynağı
         const iframe = document.createElement("iframe");
-        iframe.src = `${SAFESHARE_BASE_URL}/x/${encodeURIComponent(id)}`;
+        iframe.src = `https://invidious.nerdvpn.de/embed/${encodeURIComponent(id)}?autoplay=1`;
         iframe.title = activeVideo.title;
         iframe.loading = "eager";
-        iframe.referrerPolicy = "strict-origin-when-cross-origin";
+        iframe.referrerPolicy = "no-referrer";
         iframe.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
         iframe.allowFullscreen = true;
         playerFrame.replaceChildren(iframe);
@@ -926,9 +923,9 @@
       
       document.querySelector("#shareButton").addEventListener("click", async () => {
         if (!activeVideo) return;
-        const url = `${SAFESHARE_BASE_URL}/v/${activeVideo.id}`;
+        const url = `https://safeshare.tv/v/${activeVideo.id}`;
         if (navigator.share) await navigator.share({ title: activeVideo.title, url });
-        else { await navigator.clipboard?.writeText(url); alert("SafeShare bağlantısı kopyalandı."); }
+        else { await navigator.clipboard?.writeText(url); alert("Bağlantı kopyalandı."); }
       });
       
       document.querySelector("#homeButton").addEventListener("click", () => setMode("home"));
