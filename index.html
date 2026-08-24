@@ -527,8 +527,10 @@
          { type: "invidious", url: "https://inv.tux.pizza/api/v1/trending?region=TR" }
        ];
        const STREAM_ENDPOINTS = [
-         "https://pipedapi.kavin.rocks/streams/",
-         "https://api.piped.private.coffee/streams/"
+         { type: "piped", url: "https://pipedapi.kavin.rocks/streams/" },
+         { type: "piped", url: "https://api.piped.private.coffee/streams/" },
+         { type: "invidious", url: "https://inv.nadeko.net/api/v1/videos/" },
+         { type: "invidious", url: "https://invidious.nerdvpn.de/api/v1/videos/" }
        ];
        const TRENDING_SEARCH_TERMS = [
          "Türkiye gündem", "son dakika Türkiye", "Türkçe müzik", "yeni çıkan şarkılar",
@@ -911,16 +913,20 @@
        }
 
        function streamQuality(stream) {
-         const match = String(stream.quality || "").match(/\d+/);
+         const match = String(stream.qualityLabel || stream.quality || stream.resolution || "").match(/\d+/);
          return match ? Number(match[0]) : 0;
        }
 
        function chooseNativeStream(data) {
-         const streams = Array.isArray(data.videoStreams) ? data.videoStreams : [];
+         const streams = [
+           ...(Array.isArray(data.videoStreams) ? data.videoStreams : []),
+           ...(Array.isArray(data.formatStreams) ? data.formatStreams : [])
+         ];
          const compatible = streams.filter((stream) =>
            stream.url &&
            stream.videoOnly !== true &&
-           (!stream.mimeType || stream.mimeType.includes("video/"))
+           (!stream.mimeType || stream.mimeType.includes("video/")) &&
+           (!stream.type || stream.type.includes("video/"))
          );
          const under720 = compatible.filter((stream) => streamQuality(stream) <= 720);
          return [...(under720.length ? under720 : compatible)]
@@ -929,16 +935,17 @@
 
        async function loadNativeVideo(video) {
          const token = ++playerLoadToken;
-         playerFrame.innerHTML = '<div class="player-loading">Hafif oynatıcı hazırlanıyor...</div>';
+         playerFrame.innerHTML = '<div class="player-loading">Hafif oynatıcı hazırlanıyor...<br><small>Akış adresi aranıyor</small></div>';
 
          for (const endpoint of STREAM_ENDPOINTS) {
+           let timeoutId;
            try {
              const controller = new AbortController();
-             const timeoutId = setTimeout(() => controller.abort(), 6500);
-             const response = await fetch(`${endpoint}${encodeURIComponent(video.id)}`, {
+             timeoutId = setTimeout(() => controller.abort(), 3500);
+             const streamUrl = `${endpoint.url}${encodeURIComponent(video.id)}`;
+             const response = await fetch(streamUrl, {
                signal: controller.signal
              });
-             clearTimeout(timeoutId);
              if (!response.ok) continue;
 
              const stream = chooseNativeStream(await response.json());
@@ -959,11 +966,22 @@
              return;
            } catch (_) {
              // Diğer akış servisi denenir.
+           } finally {
+             if (timeoutId) clearTimeout(timeoutId);
            }
          }
 
-         // Yerel akış alınamazsa kullanıcı yine de videoyu izleyebilsin.
-         if (token === playerLoadToken) loadVideoIframe(video);
+         // Ağır iframe'i otomatik açma. Kullanıcı isterse ayrı YouTube
+         // sayfasını açabilir; böylece bu sayfa düşük RAM modunda kalır.
+         if (token === playerLoadToken) {
+           playerFrame.innerHTML = `
+             <div class="player-loading">
+               Bu video için hafif akış alınamadı.
+               <br><small>Sayfa düşük RAM modunda bırakıldı.</small>
+               <br><a class="player-fallback-link" href="https://www.youtube.com/watch?v=${encodeURIComponent(video.id)}"
+                 target="_blank" rel="noopener noreferrer">YouTube'u ayrı sekmede aç</a>
+             </div>`;
+         }
        }
 
        function renderLitePlayer(video) {
