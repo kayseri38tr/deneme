@@ -4,9 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="YouTube videolarını aramak, listelemek ve sayfa içinde izlemek için tek dosyalık örnek." />
-    <link rel="preconnect" href="https://www.youtube.com" />
-    <link rel="preconnect" href="https://i.ytimg.com" />
     <title>YouTune Türkiye</title>
+
+    <!-- Video.js CSS -->
+    <link href="https://vjs.zencdn.net/8.23.6/video-js.min.css" rel="stylesheet" />
+
     <style>
       :root {
         --bg: #0f0f0f;
@@ -44,6 +46,7 @@
         padding: 10px 28px;
         background: rgba(15, 15, 15, 0.94);
         border-bottom: 1px solid var(--line);
+        backdrop-filter: blur(12px);
       }
       .brand {
         display: flex;
@@ -103,32 +106,35 @@
       }
       .header-action:hover { background: var(--surface-2); }
 
-       main { width: min(1500px, calc(100% - 48px)); margin: 0 auto; padding-top: 26px; }
-       body.has-player main { padding-top: 548px; }
+      main { width: min(1500px, calc(100% - 48px)); margin: 0 auto; padding-top: 26px; }
       .inline-player {
-         position: fixed;
-         top: 64px;
-         right: 0;
-         left: 0;
-         z-index: 9;
-         width: auto;
-         max-height: calc(100vh - 64px);
-         overflow-y: auto;
-         margin: 0;
-         padding: 8px max(12px, calc((100vw - 900px) / 2)) 14px;
-         border-bottom: 1px solid var(--line);
-         background: var(--bg);
-         box-shadow: 0 12px 28px rgba(0, 0, 0, .28);
+        position: sticky;
+        top: 76px;
+        z-index: 9;
+        width: 100vw;
+        margin: 0 0 0 calc(50% - 50vw);
+        padding: 10px max(24px, calc((100vw - 920px) / 2)) 20px;
+        border-bottom: 1px solid var(--line);
+        background: var(--bg);
+        box-shadow: 0 20px 70px rgba(0, 0, 0, .42);
       }
       .inline-player-frame {
-         width: min(854px, 100%);
+        width: min(900px, 100%);
         margin: 0 auto;
         aspect-ratio: 16 / 9;
         overflow: hidden;
         border-radius: 11px;
         background: #000;
+        position: relative;
       }
-      .inline-player-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+      /* Video.js player tam alan kaplasın */
+      .inline-player-frame .video-js {
+        width: 100% !important;
+        height: 100% !important;
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
       .inline-player-details {
         display: flex;
         align-items: end;
@@ -136,7 +142,7 @@
         gap: 18px;
         padding: 14px 4px 2px;
       }
-       .inline-player-details { display: flex; }
+      .inline-player-details { display: none; }
       .inline-player-details h2 { margin: 0 0 6px; font-size: 19px; }
       .inline-player-details p { margin: 0; color: var(--muted); font-size: 13px; }
       .inline-player-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -190,14 +196,13 @@
         grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
         gap: 28px 18px;
       }
-       .video-card {
+      .video-card {
         min-width: 0;
         border-radius: var(--radius);
         outline: none;
-         content-visibility: auto;
-         contain-intrinsic-size: 260px;
+        transition: transform .2s ease;
       }
-       .video-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+      .video-card:hover, .video-card:focus-visible { transform: translateY(-4px); }
       .thumbnail-wrap {
         position: relative;
         aspect-ratio: 16 / 9;
@@ -205,13 +210,7 @@
         border-radius: var(--radius);
         background: #292929;
       }
-       .thumbnail-wrap img {
-         width: 100%;
-         height: 100%;
-         display: block;
-         object-fit: cover;
-         contain: paint;
-       }
+      .thumbnail-wrap img { width: 100%; height: 100%; display: block; object-fit: cover; }
        .card-favorite {
          position: absolute;
          top: 8px;
@@ -325,6 +324,7 @@
         padding: 8px;
         border-top: 1px solid var(--line);
         background: rgba(24, 24, 24, .96);
+        backdrop-filter: blur(12px);
       }
       .nav-button {
         min-width: 90px;
@@ -335,58 +335,11 @@
       .nav-button span { display: block; margin-bottom: 2px; font-size: 20px; }
       .nav-button.active, .nav-button:hover { color: var(--accent); }
 
-      .modal {
-        position: fixed;
-        inset: 0;
-        z-index: 20;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        background: rgba(0, 0, 0, .82);
-      }
-      .modal.open { display: flex; }
-      .player-panel {
-        width: min(980px, 100%);
-        max-height: calc(100vh - 40px);
-        overflow: auto;
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        background: var(--surface);
-        box-shadow: 0 20px 80px rgba(0, 0, 0, .55);
-      }
-      .player-top { display: flex; justify-content: end; padding: 8px 8px 0; }
-      .close-button {
-        width: 36px; height: 36px; border: 0; border-radius: 50%;
-        color: var(--text); background: var(--surface-2); font-size: 20px;
-      }
-      .close-button:hover { background: var(--accent); }
-      .player-frame { aspect-ratio: 16 / 9; background: #000; }
-      .player-frame iframe { width: 100%; height: 100%; border: 0; }
-      .player-details { padding: 18px 22px 24px; }
-      .player-details h2 { margin: 0 0 9px; font-size: 21px; }
-      .player-details p { margin: 0 0 17px; color: var(--muted); }
-      .player-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-      .player-actions button, .player-actions a {
-        padding: 9px 14px;
-        border: 1px solid var(--line);
-        border-radius: 20px;
-        color: var(--text);
-        background: var(--surface-2);
-        text-decoration: none;
-      }
-      .player-actions button:hover, .player-actions a:hover, .player-actions .selected {
-        border-color: var(--accent);
-        color: white;
-        background: var(--accent-soft);
-      }
-
       @media (max-width: 650px) {
         header { gap: 10px; padding: 9px 13px; }
         .brand { font-size: 16px; }
         .header-action { display: none; }
-         main { width: min(100% - 26px, 1500px); padding-top: 20px; }
-         body.has-player main { padding-top: calc(56.25vw + 154px); }
+        main { width: min(100% - 26px, 1500px); padding-top: 20px; }
         .inline-player {
           top: 62px;
           padding: 6px 13px 14px;
@@ -458,24 +411,33 @@
       </nav>
     </div>
 
+    <!-- Video.js + YouTube Tech -->
+    <script src="https://vjs.zencdn.net/8.23.6/video.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/videojs-youtube/3.0.1/Youtube.min.js"></script>
+
     <script>
       "use strict";
 
-       // Arama servisleri
+      // Arama servisleri
       const SEARCH_ENDPOINTS = [
         { type: "piped", url: "https://pipedapi.kavin.rocks/search" },
         { type: "piped", url: "https://api.piped.private.coffee/search" },
         { type: "invidious", url: "https://invidious.nerdvpn.de/api/v1/search" },
         { type: "invidious", url: "https://inv.tux.pizza/api/v1/search" }
       ];
-
        const TRENDING_ENDPOINTS = [
          { type: "piped", url: "https://pipedapi.kavin.rocks/trending?region=TR" },
+         { type: "piped", url: "https://api.piped.private.coffee/trending?region=TR" },
+         { type: "invidious", url: "https://invidious.nerdvpn.de/api/v1/trending?region=TR" },
          { type: "invidious", url: "https://inv.tux.pizza/api/v1/trending?region=TR" }
        ];
-       
-       // Yeni oynatıcı adresi ayarlandı
-       const PLAYER_HOST = "https://onlinevideoplayer.net/youtube-video-player";
+       const TRENDING_SEARCH_TERMS = [
+         "Türkiye gündem", "son dakika Türkiye", "Türkçe müzik", "yeni çıkan şarkılar",
+         "Türkçe pop", "Türkçe rap", "spor haberleri", "futbol Türkiye",
+         "Süper Lig", "teknoloji Türkiye", "oyun Türkçe", "Minecraft Türkçe",
+         "eğlence Türkçe", "komedi Türkçe", "film önerileri", "dizi önerileri",
+         "belgesel Türkçe", "bilim Türkçe", "ekonomi Türkiye", "magazin Türkiye"
+       ];
 
       function setCookie(name, value, days) {
         let expires = "";
@@ -498,7 +460,6 @@
         return null;
       }
 
-      // Proje videoları dizisi
       const videos = [
         { id: "rNFsWlJm09k", title: "Yeni Çıkan Türkçe Şarkılar | 22 Ağustos 2026", channel: "Adres Müzik", views: "4,8 B görüntüleme", age: "1 gün önce", duration: "8:34", category: "Müzik" },
         { id: "-FQ_-OMgzMY", title: "Yeni Çıkan Türkçe Şarkılar | 15 Ağustos 2026", channel: "Adres Müzik", views: "39 B görüntüleme", age: "8 gün önce", duration: "8:13", category: "Müzik" },
@@ -560,6 +521,7 @@
       let hasMoreSearchResults = false;
       let searchLoading = false;
       let remoteQuery = "";
+      let currentPlayer = null; // Video.js player instance
 
       const grid = document.querySelector("#videoGrid");
       const emptyState = document.querySelector("#emptyState");
@@ -620,7 +582,7 @@
         if (typeof seconds === "string") return seconds;
         const minutes = Math.floor(seconds / 60);
         const remainingSeconds = Math.floor(seconds % 60);
-        return `${minutes}:${remainingSeconds < 10 ? "0" : ""}${remainingSeconds}`;
+        return `\( {minutes}: \){remainingSeconds < 10 ? "0" : ""}${remainingSeconds}`;
       }
 
       function formatViews(views) {
@@ -642,6 +604,7 @@
 
        async function fetchTrending() {
          let lastError;
+         let trendingResults = [];
 
          for (const endpoint of TRENDING_ENDPOINTS) {
            try {
@@ -667,12 +630,27 @@
                category: "Trend"
              })).filter((video) => video.id);
 
-              if (results.length) return results.slice(0, 60);
+             if (results.length) {
+               trendingResults = results;
+               break;
+             }
            } catch (error) {
              lastError = error;
            }
          }
 
+         const searchResults = await Promise.allSettled(
+           TRENDING_SEARCH_TERMS.flatMap((term) => [1, 2].map((page) => fetchSearch(term, page)))
+         );
+         const relatedVideos = searchResults
+           .filter((result) => result.status === "fulfilled")
+           .flatMap((result) => result.value)
+           .map((video) => ({ ...video, category: "Trend" }));
+         const uniqueVideos = Array.from(new Map(
+           [...trendingResults, ...relatedVideos].map((video) => [video.id, video])
+         ).values());
+
+         if (uniqueVideos.length) return shuffleVideos(uniqueVideos).slice(0, 500);
          throw lastError || new Error("Türkiye trend videolarına şu an erişilemiyor.");
        }
 
@@ -684,8 +662,8 @@
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 4500);
              const fetchUrl = endpoint.type === "piped"
-               ? `${endpoint.url}?q=${encodeURIComponent(query)}&filter=videos&page=${page}`
-               : `${endpoint.url}?q=${encodeURIComponent(query)}&type=video&page=${page}`;
+               ? `\( {endpoint.url}?q= \){encodeURIComponent(query)}&filter=videos&page=${page}`
+               : `\( {endpoint.url}?q= \){encodeURIComponent(query)}&type=video&page=${page}`;
 
             const response = await fetch(fetchUrl, { signal: controller.signal });
             clearTimeout(timeoutId);
@@ -726,7 +704,7 @@
              ? ["Tümü", "Trend"]
              : categories;
         categoriesEl.innerHTML = sourceCategories.map((category) => `
-          <button class="category ${activeCategory === category ? "active" : ""}" type="button" data-category="${category}">
+          <button class="category \( {activeCategory === category ? "active" : ""}" type="button" data-category=" \){category}">
             ${category}
           </button>
         `).join("");
@@ -751,13 +729,12 @@
            emptyState.style.display = visibleVideos.length || mode === "favorites" ? "none" : "block";
          }
         grid.innerHTML = visibleVideos.map((video) => `
-           <article class="video-card" tabindex="0" role="button" data-video-id="${video.id}" aria-label="${video.title}">
+          <article class="video-card" tabindex="0" role="button" data-video-id="\( {video.id}" aria-label=" \){video.title}">
             <div class="thumbnail-wrap">
-               <img src="https://i.ytimg.com/vi/${video.id}/mqdefault.jpg" alt="" width="320" height="180"
-                 loading="lazy" decoding="async"
-                 onerror="this.onerror=null; this.src='https://i.ytimg.com/vi/${video.id}/default.jpg'" />
+              <img src="https://i.ytimg.com/vi/${video.id}/hq720.jpg" alt="" loading="lazy"
+                onerror="this.src='https://i.ytimg.com/vi/${video.id}/hqdefault.jpg'" />
                <button class="card-favorite ${isFavorite(video.id) ? "selected" : ""}" type="button"
-                 data-favorite-id="${video.id}" aria-label="${isFavorite(video.id) ? "Favorilerden çıkar" : "Favorilere ekle"}">
+                 data-favorite-id="\( {video.id}" aria-label=" \){isFavorite(video.id) ? "Favorilerden çıkar" : "Favorilere ekle"}">
                  ${isFavorite(video.id) ? "♥" : "♡"}
                </button>
               <span class="play-overlay">▶</span>
@@ -767,7 +744,7 @@
               <div class="channel-avatar">${video.channel.charAt(0)}</div>
               <div class="video-copy">
                 <h2 class="video-title">${video.title}</h2>
-                <p class="video-meta">${video.channel}<br>${video.views} • ${video.age}</p>
+                <p class="video-meta">\( {video.channel}<br> \){video.views} • ${video.age}</p>
               </div>
             </div>
           </article>
@@ -812,33 +789,55 @@
          }
        }
 
-       function openVideo(id) {
+      function openVideo(id) {
         activeVideo = (remoteVideos || homeVideos).find((video) => video.id === id);
         if (!activeVideo) return;
+
+        document.querySelector("#inlinePlayer").hidden = false;
         const history = getStored("youtune-history").filter((item) => item !== id);
         setStored("youtune-history", [id, ...history].slice(0, 30));
-        
         setCookie("last_watched_video", id, 30);
-
-        document.body.classList.add("has-player");
-        document.querySelector("#inlinePlayer").hidden = false;
 
         document.querySelector("#playerTitle").textContent = activeVideo.title;
         document.querySelector("#playerMeta").textContent = `${activeVideo.channel} • ${activeVideo.views} • ${activeVideo.age}`;
-        document.querySelector("#youtubeButton").href = `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
+        document.querySelector("#youtubeButton").href = `https://www.youtube.com/watch?v=${id}`;
         favoriteButton.textContent = isFavorite(id) ? "♥ Favorilerden çıkar" : "♡ Favorile";
         favoriteButton.classList.toggle("selected", isFavorite(id));
-        
-         // Yeni oynatıcı kaynağı eklendi (onlinevideoplayer.net üzerinden otomatik oynatma ile yükler)
-         const iframe = document.createElement("iframe");
-         const targetUrl = encodeURIComponent(`https://www.youtube.com/watch?v=${id}`);
-         iframe.src = `${PLAYER_HOST}/?url=${targetUrl}&autoplay=1`;
-         iframe.title = activeVideo.title;
-         iframe.loading = "eager";
-         iframe.referrerPolicy = "strict-origin-when-cross-origin";
-         iframe.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
-         iframe.allowFullscreen = true;
-         playerFrame.replaceChildren(iframe);
+
+        // Önceki Video.js player'ını temizle
+        if (currentPlayer) {
+          try {
+            currentPlayer.dispose();
+          } catch (e) {}
+          currentPlayer = null;
+        }
+
+        // Video.js player oluştur
+        playerFrame.innerHTML = `
+          <video
+            id="vjs-player"
+            class="video-js vjs-big-play-centered vjs-fluid"
+            controls
+            playsinline
+          ></video>
+        `;
+
+        currentPlayer = videojs("vjs-player", {
+          techOrder: ["youtube"],
+          sources: [{
+            type: "video/youtube",
+            src: `https://www.youtube.com/watch?v=${id}`
+          }],
+          youtube: {
+            rel: 0,
+            modestbranding: 1,
+            iv_load_policy: 3
+          },
+          fluid: true,
+          autoplay: true,
+          controls: true,
+          preload: "auto"
+        });
       }
 
       function setMode(nextMode) {
@@ -976,8 +975,7 @@
 
       renderCategories();
       renderVideos();
-       const runWhenIdle = window.requestIdleCallback || ((callback) => setTimeout(callback, 1200));
-       runWhenIdle(loadTrendingVideos);
+       loadTrendingVideos();
     </script>
   </body>
 </html>
