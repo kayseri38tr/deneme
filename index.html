@@ -871,8 +871,7 @@
              const format = String(stream.format || "").toLowerCase();
              return mime.includes("video/mp4") || format === "mp4" || format === "mpeg_4";
            })
-           .map((stream) => ({ ...stream, parsedQuality: streamQuality(stream) }))
-           .filter((stream) => stream.parsedQuality > 0);
+           .map((stream) => ({ ...stream, parsedQuality: streamQuality(stream) }));
 
          if (!compatible.length) return null;
 
@@ -880,11 +879,14 @@
          if (exact) return exact;
 
          const atOrBelow = compatible
-           .filter((stream) => stream.parsedQuality <= requestedQuality)
+           .filter((stream) => stream.parsedQuality > 0 && stream.parsedQuality <= requestedQuality)
            .sort((a, b) => b.parsedQuality - a.parsedQuality);
          if (atOrBelow.length) return atOrBelow[0];
 
-         return compatible.sort((a, b) => a.parsedQuality - b.parsedQuality)[0];
+         const knownQuality = compatible
+           .filter((stream) => stream.parsedQuality > 0)
+           .sort((a, b) => a.parsedQuality - b.parsedQuality);
+         return knownQuality[0] || compatible[0];
        }
 
        async function getVideoStream(id) {
