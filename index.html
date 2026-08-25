@@ -5,10 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="YouTube videolarını aramak, listelemek ve sayfa içinde izlemek için tek dosyalık örnek." />
     <title>YouTune Türkiye</title>
-
-    <!-- Video.js CSS -->
-    <link href="https://vjs.zencdn.net/8.23.6/video-js.min.css" rel="stylesheet" />
-
     <style>
       :root {
         --bg: #0f0f0f;
@@ -125,15 +121,36 @@
         overflow: hidden;
         border-radius: 11px;
         background: #000;
-        position: relative;
       }
-      /* Video.js player tam alan kaplasın */
-      .inline-player-frame .video-js {
-        width: 100% !important;
-        height: 100% !important;
-        position: absolute;
-        top: 0;
-        left: 0;
+      .inline-player-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+      .inline-player-frame video {
+        width: 100%;
+        height: 100%;
+        display: block;
+        background: #000;
+      }
+      .player-loading, .player-error {
+        display: grid;
+        place-items: center;
+        height: 100%;
+        min-height: 180px;
+        padding: 24px;
+        color: var(--muted);
+        text-align: center;
+      }
+      .player-error strong {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--text);
+      }
+      .player-error a {
+        display: inline-block;
+        margin-top: 14px;
+        padding: 9px 14px;
+        border-radius: 18px;
+        color: white;
+        background: var(--accent);
+        text-decoration: none;
       }
       .inline-player-details {
         display: flex;
@@ -335,6 +352,52 @@
       .nav-button span { display: block; margin-bottom: 2px; font-size: 20px; }
       .nav-button.active, .nav-button:hover { color: var(--accent); }
 
+      .modal {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(0, 0, 0, .82);
+      }
+      .modal.open { display: flex; }
+      .player-panel {
+        width: min(980px, 100%);
+        max-height: calc(100vh - 40px);
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        box-shadow: 0 20px 80px rgba(0, 0, 0, .55);
+      }
+      .player-top { display: flex; justify-content: end; padding: 8px 8px 0; }
+      .close-button {
+        width: 36px; height: 36px; border: 0; border-radius: 50%;
+        color: var(--text); background: var(--surface-2); font-size: 20px;
+      }
+      .close-button:hover { background: var(--accent); }
+      .player-frame { aspect-ratio: 16 / 9; background: #000; }
+      .player-frame iframe { width: 100%; height: 100%; border: 0; }
+      .player-details { padding: 18px 22px 24px; }
+      .player-details h2 { margin: 0 0 9px; font-size: 21px; }
+      .player-details p { margin: 0 0 17px; color: var(--muted); }
+      .player-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+      .player-actions button, .player-actions a {
+        padding: 9px 14px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        color: var(--text);
+        background: var(--surface-2);
+        text-decoration: none;
+      }
+      .player-actions button:hover, .player-actions a:hover, .player-actions .selected {
+        border-color: var(--accent);
+        color: white;
+        background: var(--accent-soft);
+      }
+
       @media (max-width: 650px) {
         header { gap: 10px; padding: 9px 13px; }
         .brand { font-size: 16px; }
@@ -383,6 +446,7 @@
             <div class="inline-player-actions">
               <button id="favoriteButton" type="button">♡ Favorile</button>
               <button id="shareButton" type="button">↗ Paylaş</button>
+               <a id="safeShareButton" target="_blank" rel="noopener noreferrer">SafeShare'e Aç</a>
               <a id="youtubeButton" target="_blank" rel="noopener noreferrer">YouTube'da Aç</a>
             </div>
           </div>
@@ -411,14 +475,10 @@
       </nav>
     </div>
 
-    <!-- Video.js + YouTube Tech -->
-    <script src="https://vjs.zencdn.net/8.23.6/video.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/videojs-youtube/3.0.1/Youtube.min.js"></script>
-
     <script>
       "use strict";
 
-      // Arama servisleri
+      // Arama servisleri: biri çalışmazsa sıradaki otomatik olarak denenir.
       const SEARCH_ENDPOINTS = [
         { type: "piped", url: "https://pipedapi.kavin.rocks/search" },
         { type: "piped", url: "https://api.piped.private.coffee/search" },
@@ -431,6 +491,12 @@
          { type: "invidious", url: "https://invidious.nerdvpn.de/api/v1/trending?region=TR" },
          { type: "invidious", url: "https://inv.tux.pizza/api/v1/trending?region=TR" }
        ];
+       // Hafif HTML5 oynatıcı için doğrudan MP4 akışı sağlayan servisler.
+       // Bu liste arama mantığına dokunmaz; sadece seçilen videonun oynatılmasını sağlar.
+       const STREAM_ENDPOINTS = [
+         "https://api.piped.private.coffee/streams/",
+         "https://pipedapi.kavin.rocks/streams/"
+       ];
        const TRENDING_SEARCH_TERMS = [
          "Türkiye gündem", "son dakika Türkiye", "Türkçe müzik", "yeni çıkan şarkılar",
          "Türkçe pop", "Türkçe rap", "spor haberleri", "futbol Türkiye",
@@ -439,6 +505,7 @@
          "belgesel Türkçe", "bilim Türkçe", "ekonomi Türkiye", "magazin Türkiye"
        ];
 
+      // Çerez Yardımcı Fonksiyonları (Siteniz için çerez yönetimi eklenmiştir)
       function setCookie(name, value, days) {
         let expires = "";
         if (days) {
@@ -460,6 +527,7 @@
         return null;
       }
 
+      // Proje videoları dizisi
       const videos = [
         { id: "rNFsWlJm09k", title: "Yeni Çıkan Türkçe Şarkılar | 22 Ağustos 2026", channel: "Adres Müzik", views: "4,8 B görüntüleme", age: "1 gün önce", duration: "8:34", category: "Müzik" },
         { id: "-FQ_-OMgzMY", title: "Yeni Çıkan Türkçe Şarkılar | 15 Ağustos 2026", channel: "Adres Müzik", views: "39 B görüntüleme", age: "8 gün önce", duration: "8:13", category: "Müzik" },
@@ -521,7 +589,7 @@
       let hasMoreSearchResults = false;
       let searchLoading = false;
       let remoteQuery = "";
-      let currentPlayer = null; // Video.js player instance
+       let playerRequestId = 0;
 
       const grid = document.querySelector("#videoGrid");
       const emptyState = document.querySelector("#emptyState");
@@ -537,7 +605,7 @@
       }
       function setStored(key, value) {
         try { localStorage.setItem(key, JSON.stringify(value)); }
-        catch (_) { }
+        catch (_) { /* Tarayıcı depolaması kapalıysa uygulama çalışmaya devam eder */ }
       }
       function isFavorite(id) { return getStored("youtune-favorites").includes(id); }
 
@@ -582,7 +650,7 @@
         if (typeof seconds === "string") return seconds;
         const minutes = Math.floor(seconds / 60);
         const remainingSeconds = Math.floor(seconds % 60);
-        return `\( {minutes}: \){remainingSeconds < 10 ? "0" : ""}${remainingSeconds}`;
+        return `${minutes}:${remainingSeconds < 10 ? "0" : ""}${remainingSeconds}`;
       }
 
       function formatViews(views) {
@@ -662,8 +730,8 @@
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 4500);
              const fetchUrl = endpoint.type === "piped"
-               ? `\( {endpoint.url}?q= \){encodeURIComponent(query)}&filter=videos&page=${page}`
-               : `\( {endpoint.url}?q= \){encodeURIComponent(query)}&type=video&page=${page}`;
+               ? `${endpoint.url}?q=${encodeURIComponent(query)}&filter=videos&page=${page}`
+               : `${endpoint.url}?q=${encodeURIComponent(query)}&type=video&page=${page}`;
 
             const response = await fetch(fetchUrl, { signal: controller.signal });
             clearTimeout(timeoutId);
@@ -704,7 +772,7 @@
              ? ["Tümü", "Trend"]
              : categories;
         categoriesEl.innerHTML = sourceCategories.map((category) => `
-          <button class="category \( {activeCategory === category ? "active" : ""}" type="button" data-category=" \){category}">
+          <button class="category ${activeCategory === category ? "active" : ""}" type="button" data-category="${category}">
             ${category}
           </button>
         `).join("");
@@ -729,12 +797,12 @@
            emptyState.style.display = visibleVideos.length || mode === "favorites" ? "none" : "block";
          }
         grid.innerHTML = visibleVideos.map((video) => `
-          <article class="video-card" tabindex="0" role="button" data-video-id="\( {video.id}" aria-label=" \){video.title}">
+          <article class="video-card" tabindex="0" role="button" data-video-id="${video.id}" aria-label="${video.title}">
             <div class="thumbnail-wrap">
               <img src="https://i.ytimg.com/vi/${video.id}/hq720.jpg" alt="" loading="lazy"
                 onerror="this.src='https://i.ytimg.com/vi/${video.id}/hqdefault.jpg'" />
                <button class="card-favorite ${isFavorite(video.id) ? "selected" : ""}" type="button"
-                 data-favorite-id="\( {video.id}" aria-label=" \){isFavorite(video.id) ? "Favorilerden çıkar" : "Favorilere ekle"}">
+                 data-favorite-id="${video.id}" aria-label="${isFavorite(video.id) ? "Favorilerden çıkar" : "Favorilere ekle"}">
                  ${isFavorite(video.id) ? "♥" : "♡"}
                </button>
               <span class="play-overlay">▶</span>
@@ -744,7 +812,7 @@
               <div class="channel-avatar">${video.channel.charAt(0)}</div>
               <div class="video-copy">
                 <h2 class="video-title">${video.title}</h2>
-                <p class="video-meta">\( {video.channel}<br> \){video.views} • ${video.age}</p>
+                <p class="video-meta">${video.channel}<br>${video.views} • ${video.age}</p>
               </div>
             </div>
           </article>
@@ -789,13 +857,96 @@
          }
        }
 
-      function openVideo(id) {
+       function streamQuality(stream) {
+         const text = String(stream.quality || stream.resolution || "");
+         const match = text.match(/(\d{3,4})p?/i);
+         return match ? Number(match[1]) : 0;
+       }
+
+       function chooseStream(streams, requestedQuality = 480) {
+         const compatible = streams
+           .filter((stream) => stream && stream.url && !stream.videoOnly)
+           .filter((stream) => {
+             const mime = String(stream.mimeType || "").toLowerCase();
+             const format = String(stream.format || "").toLowerCase();
+             return mime.includes("video/mp4") || format === "mp4" || format === "mpeg_4";
+           })
+           .map((stream) => ({ ...stream, parsedQuality: streamQuality(stream) }))
+           .filter((stream) => stream.parsedQuality > 0);
+
+         if (!compatible.length) return null;
+
+         const exact = compatible.find((stream) => stream.parsedQuality === requestedQuality);
+         if (exact) return exact;
+
+         const atOrBelow = compatible
+           .filter((stream) => stream.parsedQuality <= requestedQuality)
+           .sort((a, b) => b.parsedQuality - a.parsedQuality);
+         if (atOrBelow.length) return atOrBelow[0];
+
+         return compatible.sort((a, b) => a.parsedQuality - b.parsedQuality)[0];
+       }
+
+       async function getVideoStream(id) {
+         let lastError;
+         for (const endpoint of STREAM_ENDPOINTS) {
+           try {
+             const controller = new AbortController();
+             const timeoutId = setTimeout(() => controller.abort(), 10000);
+             const response = await fetch(`${endpoint}${encodeURIComponent(id)}`, {
+               signal: controller.signal,
+               headers: { "Accept": "application/json" }
+             });
+             clearTimeout(timeoutId);
+             if (!response.ok) continue;
+             const data = await response.json();
+             const stream = chooseStream(data.videoStreams || [], 480);
+             if (stream) return stream;
+           } catch (error) {
+             lastError = error;
+           }
+         }
+         throw lastError || new Error("Bu video için uyumlu MP4 akışı bulunamadı.");
+       }
+
+       async function loadLightPlayer(id, title, requestId) {
+         playerFrame.innerHTML = '<div class="player-loading">Hafif oynatıcı hazırlanıyor...</div>';
+         try {
+           const stream = await getVideoStream(id);
+           if (requestId !== playerRequestId) return;
+
+           const video = document.createElement("video");
+           video.controls = true;
+           video.playsInline = true;
+           video.preload = "metadata";
+           video.poster = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+           video.title = title;
+           video.setAttribute("aria-label", `${title} video oynatıcısı`);
+           video.src = stream.url;
+           playerFrame.replaceChildren(video);
+         } catch (error) {
+           if (requestId !== playerRequestId) return;
+           playerFrame.innerHTML = `
+             <div class="player-error">
+               <div>
+                 <strong>Hafif oynatıcı bu videoyu açamadı</strong>
+                 Bu video için MP4 akışı alınamadı. SafeShare sayfasında açmayı deneyebilirsin.
+                 <br>
+                 <a href="https://safeshare.tv/" target="_blank" rel="noopener noreferrer">SafeShare'e git</a>
+               </div>
+             </div>
+           `;
+         }
+       }
+
+       function openVideo(id) {
         activeVideo = (remoteVideos || homeVideos).find((video) => video.id === id);
         if (!activeVideo) return;
-
         document.querySelector("#inlinePlayer").hidden = false;
         const history = getStored("youtune-history").filter((item) => item !== id);
         setStored("youtune-history", [id, ...history].slice(0, 30));
+        
+        // İzlenen son videoyu Cookie olarak kaydeder
         setCookie("last_watched_video", id, 30);
 
         document.querySelector("#playerTitle").textContent = activeVideo.title;
@@ -804,40 +955,9 @@
         favoriteButton.textContent = isFavorite(id) ? "♥ Favorilerden çıkar" : "♡ Favorile";
         favoriteButton.classList.toggle("selected", isFavorite(id));
 
-        // Önceki Video.js player'ını temizle
-        if (currentPlayer) {
-          try {
-            currentPlayer.dispose();
-          } catch (e) {}
-          currentPlayer = null;
-        }
-
-        // Video.js player oluştur
-        playerFrame.innerHTML = `
-          <video
-            id="vjs-player"
-            class="video-js vjs-big-play-centered vjs-fluid"
-            controls
-            playsinline
-          ></video>
-        `;
-
-        currentPlayer = videojs("vjs-player", {
-          techOrder: ["youtube"],
-          sources: [{
-            type: "video/youtube",
-            src: `https://www.youtube.com/watch?v=${id}`
-          }],
-          youtube: {
-            rel: 0,
-            modestbranding: 1,
-            iv_load_policy: 3
-          },
-          fluid: true,
-          autoplay: true,
-          controls: true,
-          preload: "auto"
-        });
+         // YouTube iframe yerine doğrudan MP4 akışını kullanan hafif HTML5 oynatıcı.
+         playerRequestId += 1;
+         loadLightPlayer(id, activeVideo.title, playerRequestId);
       }
 
       function setMode(nextMode) {
@@ -969,6 +1089,18 @@
         if (navigator.share) await navigator.share({ title: activeVideo.title, url });
         else { await navigator.clipboard?.writeText(url); alert("YouTube bağlantısı kopyalandı."); }
       });
+       document.querySelector("#safeShareButton").addEventListener("click", async (event) => {
+         if (!activeVideo) return;
+         event.preventDefault();
+         const url = `https://www.youtube.com/watch?v=${activeVideo.id}`;
+         window.open("https://safeshare.tv/", "_blank", "noopener,noreferrer");
+         try {
+           await navigator.clipboard?.writeText(url);
+           alert("YouTube bağlantısı panoya kopyalandı. SafeShare'de Yapıştır seçeneğini kullan.");
+         } catch (_) {
+           alert("SafeShare açıldı. Şu bağlantıyı elle yapıştır: " + url);
+         }
+       });
       document.querySelector("#homeButton").addEventListener("click", () => setMode("home"));
       document.querySelector("#favoritesButton").addEventListener("click", () => setMode("favorites"));
       document.querySelector("#historyButton").addEventListener("click", () => setMode("history"));
