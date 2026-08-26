@@ -3,96 +3,141 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scribd Belge Çıkarıcı</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <title>Scribd PDF Derleyici</title>
+    <!-- PDF Oluşturucu Kütüphane -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 40px 20px; }
-        .card { background: white; padding: 30px; border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        button:disabled { background: #94a3b8; }
-        #status { margin-top: 15px; font-size: 0.9em; color: #475569; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .card { background: #1e293b; padding: 30px; border-radius: 12px; width: 100%; max-width: 550px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        h1 { font-size: 1.4rem; margin-bottom: 8px; color: #38bdf8; text-align: center; }
+        p.subtitle { font-size: 0.85rem; color: #94a3b8; margin-bottom: 20px; text-align: center; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; font-size: 0.8rem; margin-bottom: 6px; color: #cbd5e1; }
+        input[type="text"] { width: 100%; padding: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; font-size: 0.9rem; outline: none; }
+        input[type="text"]:focus { border-color: #38bdf8; }
+        button { width: 100%; padding: 12px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #0369a1; }
+        button:disabled { background: #475569; cursor: not-allowed; }
+        #status-container { margin-top: 20px; display: none; }
+        .progress-bar { width: 100%; height: 8px; background: #334155; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+        .progress-fill { width: 0%; height: 100%; background: #38bdf8; transition: width 0.3s; }
+        #status-text { font-size: 0.8rem; color: #94a3b8; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>Scribd Belge İndirici</h2>
-    <input type="text" id="scribd-url" placeholder="https://www.scribd.com/document/..." value="https://www.scribd.com/document/1001604550/Di-zgi-Meb-Ags-Zeki-Tu%C4%9Fa-Tari-h-Sb-2026">
-    <button id="btn" onclick="processDocument()">Belgeyi İndir</button>
-    <div id="status"></div>
+    <h1>Scribd Belge Derleyici</h1>
+    <p class="subtitle">Sayfa parçalarını toplayarak istemci tarafında PDF oluşturur</p>
+
+    <div class="input-group">
+        <label for="scribd-url">Scribd Belge Bağlantısı</label>
+        <input type="text" id="scribd-url" value="https://www.scribd.com/document/1001604550/Di-zgi-Meb-Ags-Zeki-Tu%C4%9Fa-Tari-h-Sb-2026">
+    </div>
+
+    <button id="process-btn" onclick="startExtraction()">Belgeyi İşle ve İndir</button>
+
+    <div id="status-container">
+        <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+        <div id="status-text">Hazırlanıyor...</div>
+    </div>
 </div>
 
 <script>
-async function processDocument() {
-    const url = document.getElementById('scribd-url').value;
-    const status = document.getElementById('status');
-    const btn = document.getElementById('btn');
+async function startExtraction() {
+    const urlInput = document.getElementById('scribd-url').value.trim();
+    const btn = document.getElementById('process-btn');
+    const statusContainer = document.getElementById('status-container');
+    const statusText = document.getElementById('status-text');
+    const progress = document.getElementById('progress');
 
-    if (!url.includes('scribd.com')) {
-        alert('Lütfen geçerli bir Scribd adresi girin.');
+    if (!urlInput.includes('scribd.com')) {
+        alert('Lütfen geçerli bir Scribd bağlantısı girin.');
         return;
     }
 
     btn.disabled = true;
-    status.innerText = "Scribd sayfası taranıyor ve parçalar toplanıyor...";
+    statusContainer.style.display = 'block';
+    progress.style.width = '10%';
+    statusText.innerText = 'Scribd kaynakları taranıyor...';
 
     try {
-        // CORS Proxy kullanarak Scribd HTML sayfasını çekiyoruz
-        const proxyUrl = 'https://api.cors.lol/?url=' + encodeURIComponent(url);
+        // 1. CORS Proxy üzerinden Scribd sayfasının HTML verisini çekme
+        const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(urlInput);
         const response = await fetch(proxyUrl);
-        const htmlText = await response.text();
+        
+        if (!response.ok) throw new Error('Sayfa verisi çekilemedi.');
+        const html = await response.text();
 
-        // Sayfa içerisindeki görsel/page uzantılarını regex ile arıyoruz
-        const imgMatches = htmlText.match(/https:\/\/html\.scribdassets\.com\/[a-z0-0]+\/images\/[a-z0-9-]+\.(jpg|png)/g);
+        // 2. Sayfa içindeki görsel asset bağlantılarını yakalama
+        const imageRegex = /https:\/\/html\.scribdassets\.com\/[a-z0-9]+\/images\/[a-z0-9-]+\.(jpg|png)/g;
+        let matches = html.match(imageRegex) || [];
+        
+        // Tekrarlayan bağlantıları temizleme
+        const uniquePages = [...new Set(matches)];
 
-        if (!imgMatches || imgMatches.length === 0) {
-            status.innerText = "Hata: Korumalı içerik veya önizleme görselleri doğrudan okunamadı. Harici API gerekli.";
-            btn.disabled = false;
-            return;
+        if (uniquePages.length === 0) {
+            throw new Error('Belgeye ait önizleme katmanları bulunamadı veya tamamen kilitli.');
         }
 
-        // Tekrarlayan görselleri temizle
-        const uniqueImages = [...new Set(imgMatches)];
-        status.innerText = `${uniqueImages.length} adet sayfa görseli bulundu. PDF oluşturuluyor...`;
+        progress.style.width = '30%';
+        statusText.innerText = `${uniquePages.length} sayfa bulundu. PDF derleniyor...`;
 
-        // jsPDF ile sayfaları tek PDF'e dönüştürme
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF();
+        // 3. PDFLib ile yeni bir boş PDF belgesi oluşturma
+        const { PDFDocument } = PDFLib;
+        const pdfDoc = await PDFDocument.create();
 
-        for (let i = 0; i < uniqueImages.length; i++) {
-            if (i > 0) pdf.addPage();
-            status.innerText = `Sayfa ${i + 1} / ${uniqueImages.length} işleniyor...`;
-            
-            // Görseli Base64'e çevirip PDF'e ekleme
-            const imgData = await getBase64Image(uniqueImages[i]);
-            pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+        // 4. Sayfaları sırayla indirip PDF'e dönüştürme
+        for (let i = 0; i < uniquePages.length; i++) {
+            const imgUrl = uniquePages[i];
+            const percent = 30 + Math.floor(((i + 1) / uniquePages.length) * 60);
+            progress.style.width = percent + '%';
+            statusText.innerText = `Sayfa ${i + 1} / ${uniquePages.length} indiriliyor...`;
+
+            try {
+                // Görseli Proxy üzerinden çekip ArrayBuffer'a dönüştürme
+                const imgRes = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(imgUrl));
+                const imgBytes = await imgRes.arrayBuffer();
+
+                // JPG/PNG olarak PDF belgesine ekleme
+                let embeddedImage;
+                if (imgUrl.endsWith('.png')) {
+                    embeddedImage = await pdfDoc.embedPng(imgBytes);
+                } else {
+                    embeddedImage = await pdfDoc.embedJpg(imgBytes);
+                }
+
+                const page = pdfDoc.addPage([embeddedImage.width, embeddedImage.height]);
+                page.drawImage(embeddedImage, {
+                    x: 0,
+                    y: 0,
+                    width: embeddedImage.width,
+                    height: embeddedImage.height,
+                });
+            } catch (e) {
+                console.warn(`Sayfa ${i + 1} eklenirken hata oluştu, atlanıyor.`, e);
+            }
         }
 
-        pdf.save("scribd-belge.pdf");
-        status.innerText = "İndirme tamamlandı!";
+        // 5. PDF dosyasını kaydetme ve kullanıcıya indirme bağlantısı sunma
+        progress.style.width = '100%';
+        statusText.innerText = 'PDF oluşturuldu, indirme başlatılıyor...';
+
+        const pdfBytes = await pdfDoc.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const downloadLink = document.createElement('a');
+        downloadLink.href = URL.createObjectURL(blob);
+        downloadLink.download = 'scribd-belgesi.pdf';
+        downloadLink.click();
+
+        statusText.innerText = 'İşlem başarıyla tamamlandı!';
     } catch (err) {
-        status.innerText = "Bir hata oluştu: " + err.message;
+        statusText.innerText = 'Hata: ' + err.message;
+        console.error(err);
     } finally {
         btn.disabled = false;
     }
-}
-
-function getBase64Image(imgUrl) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'Anonymous';
-        img.src = 'https://api.cors.lol/?url=' + encodeURIComponent(imgUrl);
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            resolve(canvas.toDataURL('image/jpeg'));
-        };
-        img.onerror = error => reject(error);
-    });
 }
 </script>
 
