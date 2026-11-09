@@ -10005,12 +10005,17 @@ document.addEventListener("DOMContentLoaded",()=>{enhanceAllVideos();const o=doc
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup, { once: true });
   else setup();
 })();
-document.addEventListener("DOMContentLoaded", function() {
-    document.querySelectorAll('.video-link').forEach(function(link) {
+
+ 
+document.addEventListener("click", function(event) {
+    let link = event.target.closest('.video-link');
+    if (link) {
         link.setAttribute('target', '_blank');
-        link.setAttribute('rel', 'noopener noreferrer'); // Güvenlik ve performans için önerilir
-    });
+        link.setAttribute('rel', 'noopener noreferrer');
+    }
 });
+
+
 
   
 </script>
